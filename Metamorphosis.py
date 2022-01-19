@@ -504,7 +504,13 @@ class Stardock(object):
                      .format(version, header_size, data_size, theme_type, info_size))
 
     ## Extract remaining data.
-    data = decompress(data[header_size:])
+    data = data[header_size:]
+    if data_size == len(data):
+      # the file appears to be not compressed.
+      # this happens to Phoenix.CursorFX
+      pass
+    else:
+      data = decompress(data)
 
     try:
       assert len(data) == data_size
@@ -936,7 +942,7 @@ class MSAni(object):
                  '{:<{align}} = "{}"\n'.format('SCHEME_NAME', theme_name, align = align) + \
                  '{}'.format(string_cur)
 
-    with open(os.path.join(process.output_dir, 'Install.inf'), 'w') as file:
+    with open(os.path.join(process.output_dir, 'Install.inf'), 'w', encoding='utf-8') as file:
       file.write(scheme_inf)
 
   def find_value(self, data, position):
@@ -1061,10 +1067,15 @@ class MSAni(object):
       for seq in seq_list:
         ani_header += self.int2byte(seq)
 
+    ## cap at four bytes. Phoenix.CursorFX has rates 99999999999999 (6000000000000 jiffies)
+    ffffffff = int.from_bytes(b'\xff\xff\xff\xff', byteorder='little', signed=False)
     if create_chunk_rate:
       ani_header += b'rate' + rateseq_size
       for rate in rate_list:
-        ani_header += self.int2byte(self.ms2jiffies(rate))
+        rate = self.ms2jiffies(rate)
+        if rate > ffffffff:
+          rate = ffffffff
+        ani_header += self.int2byte(rate)
 
     ## Continue to construct `.ani` header with tag 'icon'.
     ani_header += b'LIST' + b'\x00\x00\x00\x00' + b'fram' # 'LIST' - LIST size - 'fram'
